@@ -1,6 +1,9 @@
 package com.example.demo;
 
 import javafx.application.Application;
+import javafx.beans.binding.Bindings;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -10,12 +13,10 @@ import javafx.stage.Stage;
 import java.util.List;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Objects;
 
 public class HelloApplication extends Application {
-    List<String> kurser;
-    List<String> projekter;
-    String valgteModul;
-    int ectsSum;
+    int[] ects = new int[3];
 
     static Connection conn = null;
     static String url = "jdbc:sqlite:SQLit.sqlite";
@@ -30,16 +31,41 @@ public class HelloApplication extends Application {
         programComboBox.setMaxWidth(Double.MAX_VALUE);
 
         ComboBox<String> subject1ComboBox = new ComboBox<>();
-        subject1ComboBox.getItems().addAll(getData("modulNavn","Moduler","modulNavn='Mod1'"));
+        subject1ComboBox.getItems().addAll(getData("modulNavn","Moduler","modulNavn='Mod1' or modulNavn='Mod2' or modulNavn='Basis'"));
         subject1ComboBox.setMaxWidth(Double.MAX_VALUE);
 
+
+
+
         ComboBox<String> subject2ComboBox = new ComboBox<>();
-        subject2ComboBox.getItems().addAll(getData("kursusNavn","Kurser","modulNavn='Mod1'"));
+        subject2ComboBox.getItems().addAll(getData("kursusNavn","Kurser","modulNavn='rør'"));
         subject2ComboBox.setMaxWidth(Double.MAX_VALUE);
+
+        subject1ComboBox.valueProperty().addListener((obs, oldValue, newValue) -> {
+            subject2ComboBox.getItems().clear();
+            if (Objects.equals(newValue, "Mod1")) {
+                subject2ComboBox.getItems().addAll(getData("kursusNavn","Kurser","modulNavn='Mod1'"));
+        } else if(Objects.equals(newValue, "Mod2")) {
+            subject2ComboBox.getItems().addAll(getData("kursusNavn","Kurser","modulNavn='Mod2'"));
+        } else {
+            subject2ComboBox.getItems().addAll(getData("kursusNavn","Kurser","modulNavn='Basis'"));
+        }
+        });
 
         ComboBox<String> electiveComboBox = new ComboBox<>();
         electiveComboBox.getItems().addAll(getData("projektNavn","Projekter","modulNavn='Mod2'"));
         electiveComboBox.setMaxWidth(Double.MAX_VALUE);
+
+        subject1ComboBox.valueProperty().addListener((obs, oldValue, newValue) -> {
+            electiveComboBox.getItems().clear();
+            if (Objects.equals(newValue, "Mod1")) {
+                electiveComboBox.getItems().addAll(getData("projektNavn","Projekter","modulNavn='Mod1'"));
+            } else if(Objects.equals(newValue, "Mod2")) {
+                electiveComboBox.getItems().addAll(getData("projektNavn","Projekter","modulNavn='Mod2'"));
+            } else {
+                electiveComboBox.getItems().addAll(getData("projektNavn","Projekter","modulNavn='Basis'"));
+            }
+        });
 
         //lister til at se de fag der er blevet added.
         ListView<String> programListView = new ListView<>();
@@ -51,8 +77,7 @@ public class HelloApplication extends Application {
         ListView<String> projekterListView = new ListView<>();
 
         // Labels der viser hvor mange ects der er valgt i en given collum
-        Label programNumberLabel = new Label("ECTS:");
-        Label modulNumberLabel = new Label("ECTS:");
+        Label programNumberLabel = new Label("ECTS:");;
         Label kurserNumberLabel = new Label("ECTS:");
         Label projekterNumberLabel = new Label("ECTS:");
 
@@ -79,15 +104,18 @@ public class HelloApplication extends Application {
             String selectedProgram = programComboBox.getSelectionModel().getSelectedItem();
             if (selectedProgram != null) {
                 programListView.getItems().add(selectedProgram);
-                programNumberLabel.setText("ECTS:" + getECTSSum("programNavn='Bach1'"));
             }
         });
 
         addModulButton.setOnAction(e -> {
+
             String selectedSubject1 = subject1ComboBox.getSelectionModel().getSelectedItem();
             if (selectedSubject1 != null) {
-                modulListView.getItems().add(selectedSubject1);
-                modulNumberLabel.setText("ECTS:" + getECTSSum("modulNavn='Mod2'"));
+                if(!modulListView.getItems().contains(selectedSubject1)) {
+                    modulListView.getItems().clear();
+                    modulListView.getItems().add(selectedSubject1);
+                }
+
             }
         });
 
@@ -95,7 +123,15 @@ public class HelloApplication extends Application {
             String selectedSubject2 = subject2ComboBox.getSelectionModel().getSelectedItem();
             if (selectedSubject2 != null) {
                 kurserListView.getItems().add(selectedSubject2);
-                kurserNumberLabel.setText("ECTS:");
+
+                StringBuilder fuk = new StringBuilder();
+                fuk.append(getData("ects","Kurser","kursusNavn='"+selectedSubject2+"'").toString());
+                fuk.deleteCharAt(0);
+                fuk.deleteCharAt(fuk.length()-1);
+                ects[0]+=Integer.parseInt(fuk.toString());
+                ects[1]+=Integer.parseInt(fuk.toString());
+                kurserNumberLabel.setText("ECTS:"+ ects[1]);
+                programNumberLabel.setText("ECTS:" + ects[0]);
             }
         });
 
@@ -103,14 +139,25 @@ public class HelloApplication extends Application {
             String selectedElective = electiveComboBox.getSelectionModel().getSelectedItem();
             if (selectedElective != null) {
                 projekterListView.getItems().add(selectedElective);
-                projekterNumberLabel.setText("ECTS:");
+
+                StringBuilder fuk = new StringBuilder();
+                fuk.append(getData("ects","Projekter","projektNavn='"+selectedElective+"'").toString());
+                fuk.deleteCharAt(0);
+                fuk.deleteCharAt(fuk.length()-1);
+                ects[0]+=Integer.parseInt(fuk.toString());
+                ects[2]+=Integer.parseInt(fuk.toString());
+
+                projekterNumberLabel.setText("ECTS:"+ects[2]);
+                programNumberLabel.setText("ECTS:" + ects[0]);
+
             }
         });
+
 
         // tilføjer de forskellige dele i collums. delene bliver tilføjer fra toppen.
         HBox topRow = new HBox(10,
                 new VBox(5,programLabel, programComboBox, addProgramButton, programListView, programNumberLabel),
-                new VBox(5,modulLabel, subject1ComboBox, addModulButton, modulListView, modulNumberLabel),
+                new VBox(5,modulLabel, subject1ComboBox, addModulButton, modulListView),
                 new VBox(5, kurserLabel, subject2ComboBox, addKursusButton, kurserListView, kurserNumberLabel),
                 new VBox(5, projekterLabel, electiveComboBox, addProjektButton, projekterListView, projekterNumberLabel)
         );
